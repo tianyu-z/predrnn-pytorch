@@ -7,7 +7,7 @@ from core.utils import preprocess, metrics
 import lpips
 import torch
 
-loss_fn_alex = lpips.LPIPS(net='alex')
+loss_fn_alex = lpips.LPIPS(net="alex")
 
 
 def train(model, ims, real_input_flag, configs, itr):
@@ -18,12 +18,12 @@ def train(model, ims, real_input_flag, configs, itr):
         cost = cost / 2
 
     if itr % configs.display_interval == 0:
-        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'itr: ' + str(itr))
-        print('training loss: ' + str(cost))
+        print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "itr: " + str(itr))
+        print("training loss: " + str(cost))
 
 
 def test(model, test_input_handle, configs, itr):
-    print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'test...')
+    print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "test...")
     test_input_handle.begin(do_shuffle=False)
     res_path = os.path.join(configs.gen_frm_dir, str(itr))
     os.mkdir(res_path)
@@ -45,16 +45,19 @@ def test(model, test_input_handle, configs, itr):
         mask_input = configs.input_length
 
     real_input_flag = np.zeros(
-        (configs.batch_size,
-         configs.total_length - mask_input - 1,
-         configs.img_width // configs.patch_size,
-         configs.img_width // configs.patch_size,
-         configs.patch_size ** 2 * configs.img_channel))
+        (
+            configs.batch_size,
+            configs.total_length - mask_input - 1,
+            configs.img_width // configs.patch_size,
+            configs.img_width // configs.patch_size,
+            configs.patch_size ** 2 * configs.img_channel,
+        )
+    )
 
     if configs.reverse_scheduled_sampling == 1:
-        real_input_flag[:, :configs.input_length - 1, :, :] = 1.0
+        real_input_flag[:, : configs.input_length - 1, :, :] = 1.0
 
-    while (test_input_handle.no_batch_left() == False):
+    while test_input_handle.no_batch_left() == False:
         batch_id = batch_id + 1
         test_ims = test_input_handle.get_batch()
         test_dat = preprocess.reshape_patch(test_ims, configs.patch_size)
@@ -76,7 +79,9 @@ def test(model, test_input_handle, configs, itr):
             img_mse[i] += mse
             avg_mse += mse
             # cal lpips
-            img_x = np.zeros([configs.batch_size, 3, configs.img_width, configs.img_width])
+            img_x = np.zeros(
+                [configs.batch_size, 3, configs.img_width, configs.img_width]
+            )
             if configs.img_channel == 3:
                 img_x[:, 0, :, :] = x[:, :, :, 0]
                 img_x[:, 1, :, :] = x[:, :, :, 1]
@@ -86,7 +91,9 @@ def test(model, test_input_handle, configs, itr):
                 img_x[:, 1, :, :] = x[:, :, :, 0]
                 img_x[:, 2, :, :] = x[:, :, :, 0]
             img_x = torch.FloatTensor(img_x)
-            img_gx = np.zeros([configs.batch_size, 3, configs.img_width, configs.img_width])
+            img_gx = np.zeros(
+                [configs.batch_size, 3, configs.img_width, configs.img_width]
+            )
             if configs.img_channel == 3:
                 img_gx[:, 0, :, :] = gx[:, :, :, 0]
                 img_gx[:, 1, :, :] = gx[:, :, :, 1]
@@ -104,7 +111,9 @@ def test(model, test_input_handle, configs, itr):
 
             psnr[i] += metrics.batch_psnr(pred_frm, real_frm)
             for b in range(configs.batch_size):
-                score, _ = compare_ssim(pred_frm[b], real_frm[b], full=True, multichannel=True)
+                score, _ = compare_ssim(
+                    pred_frm[b], real_frm[b], full=True, multichannel=True
+                )
                 ssim[i] += score
 
         # save prediction examples
@@ -112,12 +121,12 @@ def test(model, test_input_handle, configs, itr):
             path = os.path.join(res_path, str(batch_id))
             os.mkdir(path)
             for i in range(configs.total_length):
-                name = 'gt' + str(i + 1) + '.png'
+                name = "gt" + str(i + 1) + ".png"
                 file_name = os.path.join(path, name)
                 img_gt = np.uint8(test_ims[0, i, :, :, :] * 255)
                 cv2.imwrite(file_name, img_gt)
             for i in range(img_gen_length):
-                name = 'pd' + str(i + 1 + configs.input_length) + '.png'
+                name = "pd" + str(i + 1 + configs.input_length) + ".png"
                 file_name = os.path.join(path, name)
                 img_pd = img_gen[0, i, :, :, :]
                 img_pd = np.maximum(img_pd, 0)
@@ -127,21 +136,22 @@ def test(model, test_input_handle, configs, itr):
         test_input_handle.next()
 
     avg_mse = avg_mse / (batch_id * configs.batch_size)
-    print('mse per seq: ' + str(avg_mse))
+    print("mse per seq: " + str(avg_mse))
     for i in range(configs.total_length - configs.input_length):
         print(img_mse[i] / (batch_id * configs.batch_size))
 
     ssim = np.asarray(ssim, dtype=np.float32) / (configs.batch_size * batch_id)
-    print('ssim per frame: ' + str(np.mean(ssim)))
+    print("ssim per frame: " + str(np.mean(ssim)))
     for i in range(configs.total_length - configs.input_length):
         print(ssim[i])
 
     psnr = np.asarray(psnr, dtype=np.float32) / batch_id
-    print('psnr per frame: ' + str(np.mean(psnr)))
+    print("psnr per frame: " + str(np.mean(psnr)))
     for i in range(configs.total_length - configs.input_length):
         print(psnr[i])
 
     lp = np.asarray(lp, dtype=np.float32) / batch_id
-    print('lpips per frame: ' + str(np.mean(lp)))
+    print("lpips per frame: " + str(np.mean(lp)))
     for i in range(configs.total_length - configs.input_length):
         print(lp[i])
+    return img_mse[i], ssim[i], psnr[i]
